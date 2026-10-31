@@ -1,0 +1,6 @@
+{
+  "name": "White Chocolate Studio",
+  "description": "Professional DJ mixing audio studio for TikTok streamers with real-time effects, dual decks, scratch jog wheels, crossfading, mic talkover, soundboard, and streaming platform broadcast capabilities.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
