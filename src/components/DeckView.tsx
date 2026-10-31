@@ -1,48 +1,43 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * White Chocolate Studio - Complete DJ Deck View Component (Dark Studio Edition)
- * Featuring Instant Beat & Tempo Sync to Active Deck for Seamless Transitions
+ * White Chocolate Studio - Lowrider DJ Deck View Component
  */
 
-import React, { useRef, useState } from 'react';
-import { DJEngine, DeckState } from '../audio/DJEngine';
-import { TrackMetadata } from '../audio/proceduralTracks';
+import React, { useRef } from 'react';
+import { DJEngine, DeckState, FilterPresetId } from '../audio/DJEngine';
+import { TrackMetadata, STUDIO_ICON_URL } from '../audio/proceduralTracks';
 import { JogWheel } from './JogWheel';
 import { WaveformDisplay } from './WaveformDisplay';
-import { Play, Pause, Zap, Music, Upload, Check } from 'lucide-react';
+import { Play, Pause, RotateCcw, Zap, Music, Upload, Download, Disc } from 'lucide-react';
 
 interface DeckViewProps {
   deckId: 'A' | 'B';
   engine: DJEngine;
   state: DeckState;
   availableTracks: TrackMetadata[];
-  isDark?: boolean;
+  onTrackAdded?: (track: TrackMetadata) => void;
 }
+
+const FILTER_PRESETS: Array<{ id: FilterPresetId; label: string }> = [
+  { id: 'bypass', label: 'Clean' },
+  { id: 'sub_boost', label: '808 Sub' },
+  { id: 'velvet_warmth', label: '90s Warm' },
+  { id: 'chopped_slow', label: 'Screwed' },
+  { id: 'vocal_iso', label: 'Vocal' },
+  { id: 'lofi_telephone', label: 'Lo-Fi' },
+];
 
 export const DeckView: React.FC<DeckViewProps> = ({
   deckId,
   engine,
   state,
   availableTracks,
-  isDark = true,
+  onTrackAdded,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [syncFlash, setSyncFlash] = useState(false);
-
-  const isA = deckId === 'A';
-  const color = isA ? '#ef4444' : '#3b82f6';
-  const otherDeckId = isA ? 'B' : 'A';
-  const otherDeck = isA ? engine.deckBState : engine.deckAState;
-
-  // Sync detection: are both tracks loaded and matching effective BPM within 0.15?
-  const isBpmSynced = Boolean(
-    state.track &&
-    otherDeck.track &&
-    Math.abs(state.effectiveBpm - otherDeck.effectiveBpm) < 0.2
-  );
-
-  const isOtherActive = Boolean(otherDeck.isPlaying && !state.isPlaying);
+  const color = deckId === 'A' ? '#ef4444' : '#3b82f6';
+  const borderAccent = deckId === 'A' ? 'border-rose-500/30' : 'border-blue-500/30';
 
   const handleSelectTrack = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const trackId = e.target.value;
@@ -52,23 +47,12 @@ export const DeckView: React.FC<DeckViewProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      engine.loadCustomAudioFile(file, deckId);
-    }
-  };
-
-  const handleSyncClick = () => {
-    engine.syncDeck(deckId);
-    setSyncFlash(true);
-    setTimeout(() => setSyncFlash(false), 900);
-
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(35);
-      } catch {
-        // ignore
+      const loaded = await engine.loadCustomAudioFile(file, deckId);
+      if (loaded && onTrackAdded) {
+        onTrackAdded(loaded);
       }
     }
   };
@@ -79,75 +63,82 @@ export const DeckView: React.FC<DeckViewProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Dark Theme Styling Classes
-  const containerClasses = isDark
-    ? isA
-      ? 'bg-slate-900/95 border-slate-800 shadow-rose-950/20 text-slate-100'
-      : 'bg-slate-900/95 border-slate-800 shadow-blue-950/20 text-slate-100'
-    : isA
-    ? 'bg-gradient-to-b from-rose-50/90 to-white border-rose-200 text-slate-800'
-    : 'bg-gradient-to-b from-sky-50/90 to-white border-sky-200 text-slate-800';
-
-  const cardInnerClass = isDark ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200';
-  const textMutedClass = isDark ? 'text-slate-400' : 'text-slate-500';
-
   return (
     <div
-      className={`flex flex-col ${containerClasses} rounded-3xl border shadow-2xl p-3.5 sm:p-4 relative overflow-hidden backdrop-blur-md transition-all duration-200`}
+      className={`flex flex-col bg-slate-900/95 rounded-2xl border ${borderAccent} p-3 sm:p-4 shadow-xl relative overflow-hidden`}
     >
-      {/* Top Track Info & Select */}
-      <div className={`flex items-center justify-between gap-2 mb-2 pb-2.5 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs text-white shrink-0 shadow-md"
-            style={{ backgroundColor: color }}
-          >
-            {deckId}
+      {/* Top Chrome Pinstripe Accent */}
+      <div
+        className="absolute top-0 left-0 right-0 h-1"
+        style={{
+          background:
+            deckId === 'A'
+              ? 'linear-gradient(90deg, #94a3b8 0%, #ef4444 35%, #f59e0b 50%, #ef4444 65%, #94a3b8 100%)'
+              : 'linear-gradient(90deg, #94a3b8 0%, #3b82f6 35%, #e2e8f0 50%, #3b82f6 65%, #94a3b8 100%)',
+        }}
+      />
+
+      {/* Top Track Info & BPM / Tap Tempo */}
+      <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-800 pt-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-400/60 shrink-0 shadow-md">
+            <img
+              src={state.track?.coverImage || STUDIO_ICON_URL}
+              alt={`Deck ${deckId}`}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
+            <span
+              className="absolute bottom-0 right-0 px-1 text-[9px] font-black text-white leading-tight"
+              style={{ backgroundColor: color }}
+            >
+              {deckId}
+            </span>
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-black truncate flex items-center gap-1.5 leading-tight">
-              <span>{state.track?.title || `Deck ${deckId} (Empty)`}</span>
-              {state.track?.key && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'} font-mono font-bold border`}>
-                  {state.track.key}
-                </span>
-              )}
+            <h2 className="text-sm font-bold text-slate-100 truncate">
+              {state.track?.title || `Deck ${deckId} (Empty)`}
             </h2>
-            <p className={`text-[11px] ${textMutedClass} font-semibold truncate`}>
-              {state.track?.artist || 'Select or drop an audio track'}
+            <p className="text-[11px] text-slate-400 truncate">
+              {state.track?.artist || 'Select or upload a track'}
+              {state.track?.key ? ` · ${state.track.key}` : ''}
             </p>
           </div>
         </div>
 
-        {/* BPM readout & Pitch Offset */}
-        <div className="text-right shrink-0">
-          <div className="text-lg font-black font-mono tracking-tight tabular-nums flex items-center justify-end gap-1">
-            <span>{state.effectiveBpm.toFixed(1)}</span>
-            <span className={`text-[10px] font-normal ${textMutedClass}`}>BPM</span>
-          </div>
-          <div className="flex items-center justify-end gap-1 text-[10px] font-mono font-bold tabular-nums">
-            <span className={state.tempo > 0 ? 'text-amber-400' : state.tempo < 0 ? 'text-cyan-400' : textMutedClass}>
-              {state.tempo >= 0 ? `+${(state.tempo * 100).toFixed(1)}%` : `${(state.tempo * 100).toFixed(1)}%`}
-            </span>
-            {isBpmSynced && (
-              <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-                SYNC
-              </span>
-            )}
+        {/* BPM Readout & Tap Tempo */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => engine.tapTempo(deckId)}
+            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[10px] font-mono font-bold text-amber-300 border border-slate-700 transition-transform"
+            title="Tap 3+ times to match BPM"
+          >
+            TAP
+          </button>
+          <div className="text-right">
+            <div className="text-base sm:text-lg font-black font-mono tracking-tight text-white tabular-nums leading-none">
+              {state.effectiveBpm.toFixed(1)}{' '}
+              <span className="text-[10px] font-normal text-slate-400">BPM</span>
+            </div>
+            <div className="text-[10px] font-mono text-amber-400 tabular-nums mt-0.5">
+              {state.tempo >= 0
+                ? `+${(state.tempo * 100).toFixed(1)}%`
+                : `${(state.tempo * 100).toFixed(1)}%`}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Track Selector & Local Audio Import Button */}
+      {/* Track Selector, Upload Music File & Download WAV */}
       <div className="flex items-center gap-1.5 mb-2.5">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <select
             value={state.track?.id || ''}
             onChange={handleSelectTrack}
-            className={`w-full h-8 pl-2 pr-7 text-xs font-semibold ${isDark ? 'bg-slate-950 text-slate-200 border-slate-800 focus:border-slate-600' : 'bg-white text-slate-800 border-slate-300 focus:border-rose-400'} border rounded-xl focus:outline-none appearance-none truncate shadow-xs`}
+            className="w-full h-8 pl-2 pr-7 text-xs bg-slate-950 text-slate-200 border border-slate-700/80 rounded-lg focus:outline-none focus:border-amber-400 appearance-none truncate"
           >
             <option value="" disabled>
-              Select Track Library...
+              Select Track from Crate...
             </option>
             {availableTracks.map((t) => (
               <option key={t.id} value={t.id}>
@@ -155,17 +146,28 @@ export const DeckView: React.FC<DeckViewProps> = ({
               </option>
             ))}
           </select>
-          <Music className={`w-3.5 h-3.5 ${textMutedClass} absolute right-2.5 top-2.5 pointer-events-none`} />
+          <Music className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
         </div>
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className={`h-8 px-2.5 flex items-center gap-1 ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'} text-xs font-bold rounded-xl border shrink-0 transition-colors shadow-xs`}
-          title="Upload local MP3 / WAV from device"
+          className="h-8 px-2.5 flex items-center gap-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 text-xs font-semibold rounded-lg border border-slate-600 shrink-0 transition-colors whitespace-nowrap"
+          title="Upload MP3 / WAV / Audio File from device"
         >
-          <Upload className={`w-3.5 h-3.5 ${isA ? 'text-rose-400' : 'text-blue-400'}`} />
-          <span className="hidden sm:inline">Upload</span>
+          <Upload className="w-3.5 h-3.5 text-amber-400" />
+          <span>Upload</span>
         </button>
+
+        <button
+          onClick={() => engine.downloadDeckTrackWav(deckId)}
+          disabled={!state.track?.buffer}
+          className="h-8 px-2.5 flex items-center gap-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-100 text-xs font-semibold rounded-lg border border-slate-600 shrink-0 transition-colors whitespace-nowrap"
+          title="Download current Deck Track as WAV file"
+        >
+          <Download className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="hidden sm:inline">WAV</span>
+        </button>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -175,8 +177,8 @@ export const DeckView: React.FC<DeckViewProps> = ({
         />
       </div>
 
-      {/* Waveform visualizer */}
-      <div className={`mb-3 ${cardInnerClass} p-1.5 rounded-2xl border shadow-inner`}>
+      {/* Waveform Visualizer */}
+      <div className="mb-2.5">
         <WaveformDisplay
           track={state.track}
           currentTime={state.currentTime}
@@ -185,17 +187,17 @@ export const DeckView: React.FC<DeckViewProps> = ({
           hotCues={state.hotCues}
           color={color}
           onSeek={(time) => engine.scrubDeck(deckId, time)}
-          height={48}
+          height={46}
         />
-        <div className={`flex justify-between items-center text-[10px] font-mono font-bold ${textMutedClass} mt-1 px-1`}>
+        <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mt-1 px-1 tabular-nums">
           <span>{formatTime(state.currentTime)}</span>
+          <span>{ state.platterStyle === 'chrome_100_spoke' ? '100-SPOKE CHROME RIM' : 'CLASSIC VINYL' }</span>
           <span>{formatTime(state.duration)}</span>
         </div>
       </div>
 
-      {/* Main Platter & Pitch Fader Section */}
+      {/* Main 100-Spoke Chrome Wheel Platter & Pitch Fader */}
       <div className="flex items-center justify-around gap-2 mb-3">
-        {/* Jog Wheel Platter */}
         <JogWheel
           deckId={deckId}
           isPlaying={state.isPlaying}
@@ -204,141 +206,133 @@ export const DeckView: React.FC<DeckViewProps> = ({
           bpm={state.effectiveBpm}
           color={color}
           coverImage={state.track?.coverImage || engine.customCoverUrl}
+          platterStyle={state.platterStyle}
+          onTogglePlatterStyle={() => {
+            state.platterStyle =
+              state.platterStyle === 'chrome_100_spoke' ? 'vinyl' : 'chrome_100_spoke';
+            engine.notifyUpdate();
+          }}
           onScratchStart={() => engine.startScratch(deckId)}
           onScratchMove={(delta) => engine.scratchMove(deckId, delta)}
           onScratchEnd={() => engine.endScratch(deckId)}
           onPitchNudge={(dir) => engine.nudgePitch(deckId, dir)}
         />
 
-        {/* Vertical Tempo / Pitch Fader with Direct Pitch Sync */}
-        <div className={`flex flex-col items-center ${cardInnerClass} p-2 rounded-2xl border h-52 justify-between shadow-sm`}>
-          <div className={`text-[10px] font-mono font-bold ${textMutedClass}`}>PITCH</div>
-          <div className="text-[10px] font-mono font-bold text-amber-400 tabular-nums">
-            {state.tempo >= 0 ? `+${(state.tempo * 100).toFixed(1)}%` : `${(state.tempo * 100).toFixed(1)}%`}
+        {/* Vertical Tempo / Pitch Fader */}
+        <div className="flex flex-col items-center bg-slate-950/80 p-2 rounded-xl border border-slate-800 h-52 justify-between">
+          <div className="text-[10px] font-mono text-slate-400 font-bold">TEMPO</div>
+          <div className="text-[10px] font-mono text-amber-400 font-bold tabular-nums">
+            {state.tempo >= 0
+              ? `+${(state.tempo * 100).toFixed(1)}%`
+              : `${(state.tempo * 100).toFixed(1)}%`}
           </div>
 
-          {/* Slider with wide dynamic range */}
-          <div className="relative h-28 flex items-center justify-center">
+          <div className="relative h-32 flex items-center justify-center">
             <input
               type="range"
-              min={Math.min(-0.35, state.tempo)}
-              max={Math.max(0.35, state.tempo)}
+              min={-0.25}
+              max={0.25}
               step={0.001}
               value={state.tempo}
-              onChange={(e) => engine.setTempo(deckId, parseFloat(e.target.value), true)}
-              className="dj-slider -rotate-90 w-28 h-6 accent-rose-500"
+              onChange={(e) => engine.setTempo(deckId, parseFloat(e.target.value))}
+              className="dj-slider -rotate-90 w-28 h-6"
             />
           </div>
 
-          <div className="flex flex-col gap-1 w-full">
-            <button
-              onClick={() => engine.setTempo(deckId, 0)}
-              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}
-              title="Reset Pitch to 0%"
-            >
-              RESET
-            </button>
-            <button
-              onClick={handleSyncClick}
-              className={`text-[9px] font-mono font-bold px-1.5 py-1 rounded transition-all active:scale-95 flex items-center justify-center gap-0.5 ${
-                isBpmSynced
-                  ? 'bg-emerald-500 text-white shadow-xs'
-                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'
-              }`}
-              title={`Sync BPM to Deck ${otherDeckId}`}
-            >
-              <Zap className="w-2.5 h-2.5 fill-current" />
-              <span>SYNC</span>
-            </button>
-          </div>
+          <button
+            onClick={() => engine.setTempo(deckId, 0)}
+            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 font-mono"
+            title="Reset Tempo to 0%"
+          >
+            RESET
+          </button>
         </div>
       </div>
 
-      {/* Primary Transport Controls: PLAY/PAUSE, CUE, and Dedicated Master BPM SYNC BUTTON */}
-      <div className="grid grid-cols-12 gap-2 mb-3">
-        {/* Big PLAY/PAUSE Button */}
+      {/* Transport Controls: Play/Pause, CUE, SYNC */}
+      <div className="grid grid-cols-3 gap-2 mb-2.5">
         <button
           onClick={() => engine.playPauseDeck(deckId)}
-          className={`col-span-5 h-12 rounded-2xl flex items-center justify-center gap-1.5 font-black text-xs tracking-wider transition-all shadow-lg active:scale-95 ${
+          className={`h-11 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg transition-transform active:scale-95 whitespace-nowrap ${
             state.isPlaying
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white ring-2 ring-emerald-400 animate-pulse'
-              : isA
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white'
-              : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 text-white'
+              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+              : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-600'
           }`}
         >
           {state.isPlaying ? (
-            <>
-              <Pause className="w-4 h-4 fill-current" />
-              <span>PAUSE</span>
-            </>
+            <Pause className="w-4 h-4 fill-current" />
           ) : (
-            <>
-              <Play className="w-4 h-4 fill-current" />
-              <span>PLAY</span>
-            </>
+            <Play className="w-4 h-4 fill-current" />
           )}
+          <span>{state.isPlaying ? 'PAUSE' : 'PLAY'}</span>
         </button>
 
-        {/* CUE Button */}
         <button
-          onMouseDown={() => engine.triggerCue(deckId, true)}
-          onMouseUp={() => engine.triggerCue(deckId, false)}
-          onTouchStart={() => engine.triggerCue(deckId, true)}
-          onTouchEnd={() => engine.triggerCue(deckId, false)}
-          className={`col-span-3 h-12 rounded-2xl font-mono font-bold text-xs flex items-center justify-center transition-all border shadow-sm active:scale-95 ${
+          onPointerDown={() => engine.triggerCue(deckId, true)}
+          onPointerUp={() => engine.triggerCue(deckId, false)}
+          onPointerLeave={() => engine.triggerCue(deckId, false)}
+          className={`h-11 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg transition-transform active:scale-95 whitespace-nowrap ${
             state.isCuePressed
-              ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-amber-400/30'
-              : isDark
-              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              ? 'bg-amber-500 text-slate-950'
+              : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40'
           }`}
         >
-          CUE
+          <RotateCcw className="w-4 h-4" />
+          <span>CUE</span>
         </button>
 
-        {/* DEDICATED PRO-GRADE SYNC BUTTON */}
-        {/* Automatically adjusts playback speed of non-playing deck to match BPM of active deck */}
         <button
-          onClick={handleSyncClick}
-          className={`col-span-4 h-12 rounded-2xl font-mono font-bold text-xs flex flex-col items-center justify-center transition-all border shadow-md active:scale-95 ${
-            syncFlash
-              ? 'bg-amber-400 text-slate-950 scale-105 border-white ring-2 ring-amber-300'
-              : isBpmSynced
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-500/20'
-              : isOtherActive
-              ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 border-amber-400 animate-pulse'
-              : isDark
-              ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
-              : 'bg-white hover:bg-slate-50 text-amber-600 border-slate-300'
-          }`}
-          title={
-            isOtherActive
-              ? `Sync Deck ${deckId} playback speed to active Deck ${otherDeckId} (${otherDeck.effectiveBpm.toFixed(1)} BPM)`
-              : `Sync playback speed between Deck A and Deck B for seamless transition`
-          }
+          onClick={() => engine.syncDeck(deckId)}
+          className="h-11 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition-transform active:scale-95 whitespace-nowrap"
+          title="Auto-match BPM and beat phase to opposite deck"
         >
-          <div className="flex items-center gap-1 leading-none">
-            {isBpmSynced ? (
-              <Check className="w-3.5 h-3.5 text-white" />
-            ) : (
-              <Zap className="w-3.5 h-3.5 text-current fill-current" />
-            )}
-            <span className="font-black tracking-tight">SYNC</span>
-          </div>
-          <span className="text-[9px] opacity-90 leading-tight truncate font-mono mt-0.5">
-            {isBpmSynced ? `${state.effectiveBpm.toFixed(1)} BPM` : `→ ${otherDeck.effectiveBpm.toFixed(1)}`}
-          </span>
+          <Zap className="w-4 h-4 fill-current" />
+          <span>SYNC</span>
         </button>
       </div>
 
-      {/* Auto Beat Looper */}
-      <div className={`${cardInnerClass} rounded-2xl p-2 border mb-2.5 shadow-sm`}>
-        <div className="flex items-center justify-between mb-1">
-          <span className={`text-[10px] font-bold ${textMutedClass} tracking-wider`}>BEAT LOOP</span>
-          <span className="text-[10px] font-mono font-bold text-amber-400">
-            {state.loop.active ? `${state.loop.lengthBeats} BEATS (ACTIVE)` : 'OFF'}
+      {/* Quick Studio Filter Style Presets */}
+      <div className="bg-slate-950/70 rounded-xl p-2 mb-2.5 border border-slate-800">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold text-slate-300 tracking-wider flex items-center gap-1">
+            <Disc className="w-3 h-3 text-amber-400" />
+            <span>STUDIO FILTER TONE</span>
           </span>
+          <span className="text-[10px] font-mono text-amber-400 uppercase">
+            {state.activeFilterPreset.replace('_', ' ')}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
+          {FILTER_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => engine.applyFilterPreset(deckId, preset.id)}
+              className={`h-7 rounded text-[10px] font-bold transition-colors whitespace-nowrap px-1 ${
+                state.activeFilterPreset === preset.id
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Loop & Beat Roll Section */}
+      <div className="bg-slate-950/70 rounded-xl p-2 mb-2.5 border border-slate-800">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold text-slate-400 tracking-wider">LOOP / CHOP ROLL</span>
+          <button
+            onClick={() => engine.toggleLoop(deckId)}
+            className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
+              state.loop.active
+                ? 'bg-amber-500 text-slate-950 font-black'
+                : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            {state.loop.active ? 'ACTIVE' : 'OFF'}
+          </button>
         </div>
         <div className="grid grid-cols-5 gap-1">
           {[0.5, 1, 2, 4, 8].map((beats) => (
@@ -352,12 +346,10 @@ export const DeckView: React.FC<DeckViewProps> = ({
                   if (!state.loop.active) engine.toggleLoop(deckId, beats);
                 }
               }}
-              className={`h-7 rounded-lg text-[11px] font-mono font-bold transition-all ${
+              className={`h-7 rounded text-[11px] font-mono font-bold transition-colors ${
                 state.loop.active && state.loop.lengthBeats === beats
-                  ? 'bg-amber-400 text-slate-950 shadow-xs font-black'
-                  : isDark
-                  ? 'bg-slate-850 hover:bg-slate-800 text-slate-300'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  ? 'bg-amber-400 text-slate-950'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
               }`}
             >
               {beats === 0.5 ? '1/2' : `${beats}B`}
@@ -367,10 +359,10 @@ export const DeckView: React.FC<DeckViewProps> = ({
       </div>
 
       {/* Hot Cues (1, 2, 3, 4) */}
-      <div className={`${cardInnerClass} rounded-2xl p-2 border shadow-sm`}>
+      <div className="bg-slate-950/70 rounded-xl p-2 border border-slate-800">
         <div className="flex items-center justify-between mb-1.5">
-          <span className={`text-[10px] font-bold ${textMutedClass} tracking-wider`}>HOT CUES</span>
-          <span className={`text-[9px] ${textMutedClass} font-semibold`}>Tap Jump · Right-click clear</span>
+          <span className="text-[10px] font-bold text-slate-400 tracking-wider">HOT CUES</span>
+          <span className="text-[9px] text-slate-500">Tap to Jump · Right-Click to Clear</span>
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {state.hotCues.map((cue, idx) => {
@@ -386,12 +378,10 @@ export const DeckView: React.FC<DeckViewProps> = ({
                   e.preventDefault();
                   engine.deleteHotCue(deckId, idx);
                 }}
-                className={`h-9 rounded-xl font-mono font-bold text-xs flex flex-col items-center justify-center border transition-all active:scale-95 ${
+                className={`h-9 rounded-lg font-mono font-bold text-xs flex flex-col items-center justify-center border transition-transform active:scale-95 ${
                   hasCue
-                    ? 'text-white shadow-xs font-black'
-                    : isDark
-                    ? 'bg-slate-900 text-slate-500 border-slate-800 hover:bg-slate-850'
-                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                    ? 'text-white shadow-md'
+                    : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700'
                 }`}
                 style={{
                   backgroundColor: hasCue ? padColor : undefined,
@@ -400,7 +390,7 @@ export const DeckView: React.FC<DeckViewProps> = ({
               >
                 <span>{idx + 1}</span>
                 {hasCue && (
-                  <span className="text-[8px] opacity-90 leading-none">
+                  <span className="text-[8px] opacity-80 leading-none tabular-nums">
                     {formatTime(cue)}
                   </span>
                 )}

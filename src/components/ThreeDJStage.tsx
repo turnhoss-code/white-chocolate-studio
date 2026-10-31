@@ -2,7 +2,6 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * White Chocolate Studio - Interactive 3D DJ Booth & Lowrider Stage (Three.js)
- * Enhanced with 1964 Chevy Impala Lowrider matching the studio icon pic.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -10,18 +9,16 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DJEngine } from '../audio/DJEngine';
-import { Play, Pause, ChevronDown, ChevronUp, Camera, Sparkles, Maximize2, Minimize2, Gauge } from 'lucide-react';
+import { Play, Pause, ChevronDown, ChevronUp, Camera, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 
 interface ThreeDJStageProps {
   engine: DJEngine;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
-  isDark?: boolean;
-  onOpenDiagnostics?: () => void;
 }
 
 type CameraPresetId = 'booth' | 'lowrider' | 'tiktok916' | 'orbit';
-type FinishPresetId = 'candy_red' | 'pastel_mint' | 'pastel_lavender' | 'chrome_gold' | 'cobalt';
+type FinishPresetId = 'candy_red' | 'chrome_gold' | 'obsidian' | 'cobalt';
 
 interface CameraPreset {
   id: CameraPresetId;
@@ -31,17 +28,16 @@ interface CameraPreset {
 }
 
 const CAMERA_PRESETS: CameraPreset[] = [
-  { id: 'booth', label: 'DJ Booth', pos: [0, 2.9, 4.2], look: [0, 1.1, 0.2] },
-  { id: 'lowrider', label: 'Lowrider Front', pos: [0, 1.3, -0.6], look: [0, 0.8, -2.8] },
-  { id: 'tiktok916', label: 'TikTok 9:16', pos: [0, 2.4, 4.8], look: [0, 1.2, -1.0] },
-  { id: 'orbit', label: 'Stage Wide', pos: [4.6, 3.8, 5.2], look: [0, 1.0, -1.2] },
+  { id: 'booth', label: 'DJ Booth', pos: [0, 3.2, 4.4], look: [0, 1.15, 0.2] },
+  { id: 'lowrider', label: 'Lowrider Cam', pos: [-3.8, 2.1, 2.2], look: [0, 0.9, -2.6] },
+  { id: 'tiktok916', label: 'TikTok 9:16', pos: [0, 2.6, 5.6], look: [0, 1.3, -1.0] },
+  { id: 'orbit', label: 'Stage Wide', pos: [5.2, 4.2, 6.2], look: [0, 1.1, -1.2] },
 ];
 
 const FINISH_PRESETS: Array<{ id: FinishPresetId; label: string; color: number; metalness: number; roughness: number }> = [
-  { id: 'candy_red', label: 'Candy Apple Red (Photo)', color: 0xc8102e, metalness: 0.92, roughness: 0.12 },
-  { id: 'pastel_mint', label: 'Pastel Mint Lowrider', color: 0x86efac, metalness: 0.86, roughness: 0.16 },
-  { id: 'pastel_lavender', label: 'Pastel Lavender', color: 0xd8b4fe, metalness: 0.88, roughness: 0.16 },
-  { id: 'chrome_gold', label: '24K Gold Lowrider', color: 0xf59e0b, metalness: 0.96, roughness: 0.10 },
+  { id: 'candy_red', label: 'Candy Red', color: 0xd91424, metalness: 0.88, roughness: 0.16 },
+  { id: 'chrome_gold', label: '24K Gold', color: 0xf59e0b, metalness: 0.96, roughness: 0.12 },
+  { id: 'obsidian', label: 'Obsidian Chrome', color: 0x1e293b, metalness: 0.92, roughness: 0.18 },
   { id: 'cobalt', label: 'West Coast Blue', color: 0x2563eb, metalness: 0.88, roughness: 0.16 },
 ];
 
@@ -52,6 +48,7 @@ const _mat4 = new THREE.Matrix4();
 const _posVec = new THREE.Vector3();
 const _scaleVec = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
+const _color = new THREE.Color();
 
 function createProceduralVinylTexture(maxAnisotropy: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -59,6 +56,7 @@ function createProceduralVinylTexture(maxAnisotropy: number): THREE.CanvasTextur
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
+  // Base dark vinyl
   ctx.fillStyle = '#0c0e14';
   ctx.fillRect(0, 0, 512, 512);
 
@@ -86,10 +84,10 @@ function createProceduralVinylTexture(maxAnisotropy: number): THREE.CanvasTextur
 
   // White Chocolate text ring on label
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 20px sans-serif';
+  ctx.font = 'bold 20px Outfit, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('WHITE CHOCOLATE', cx, cy - 24);
-  ctx.font = 'bold 16px monospace';
+  ctx.font = 'bold 16px JetBrains Mono, monospace';
   ctx.fillStyle = '#fde68a';
   ctx.fillText('STUDIO $$ LIVE', cx, cy + 38);
 
@@ -103,108 +101,27 @@ function createProceduralVinylTexture(maxAnisotropy: number): THREE.CanvasTextur
   return tex;
 }
 
-// Procedural Chicano Pinstriping & Filigree Texture matching the .JPG Lowrider Hood
-function createLowriderPinstripeTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
-  const ctx = canvas.getContext('2d')!;
-
-  // Deep Candy Red Base
-  ctx.fillStyle = '#b91c1c';
-  ctx.fillRect(0, 0, 1024, 1024);
-
-  const cx = 512;
-
-  // Draw intricate symmetrical Chicano pinstripe flourishes
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4;
-  ctx.lineCap = 'round';
-  ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-  ctx.shadowBlur = 6;
-
-  // Center Hood Spear Line
-  ctx.beginPath();
-  ctx.moveTo(cx, 80);
-  ctx.lineTo(cx, 950);
-  ctx.stroke();
-
-  // Symmetrical Filigree Scrolls & Flourishes
-  const drawSymmetricCurve = (
-    x1: number, y1: number,
-    cp1x: number, cp1y: number,
-    cp2x: number, cp2y: number,
-    x2: number, y2: number
-  ) => {
-    // Right side
-    ctx.beginPath();
-    ctx.moveTo(cx + x1, y1);
-    ctx.bezierCurveTo(cx + cp1x, cp1y, cx + cp2x, cp2y, cx + x2, y2);
-    ctx.stroke();
-
-    // Left side (mirrored)
-    ctx.beginPath();
-    ctx.moveTo(cx - x1, y1);
-    ctx.bezierCurveTo(cx - cp1x, cp1y, cx - cp2x, cp2y, cx - x2, y2);
-    ctx.stroke();
-  };
-
-  // Top Nose Flourishes
-  for (let s = 0; s < 4; s++) {
-    const yOff = s * 70;
-    drawSymmetricCurve(0, 140 + yOff, 60, 100 + yOff, 140, 170 + yOff, 0, 220 + yOff);
-    drawSymmetricCurve(0, 160 + yOff, 110, 120 + yOff, 200, 210 + yOff, 40, 260 + yOff);
-  }
-
-  // Fender Edge Pinstripe Bands
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 3;
-  drawSymmetricCurve(380, 180, 420, 400, 410, 700, 360, 920);
-  drawSymmetricCurve(395, 200, 435, 420, 425, 680, 375, 900);
-
-  // Chrome Silver Teardrop Accents
-  ctx.fillStyle = '#f8fafc';
-  for (let d = 0; d < 6; d++) {
-    const dy = 200 + d * 110;
-    ctx.beginPath();
-    ctx.arc(cx, dy, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(cx - 80 - d * 20, dy + 20, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(cx + 80 + d * 20, dy + 20, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 function createProceduralAsphaltTexture(maxAnisotropy: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#1e293b';
+  ctx.fillStyle = '#090c15';
   ctx.fillRect(0, 0, 512, 512);
 
-  // Subtle wet asphalt grain
+  // Subtle wet road grain & lane markings
   for (let i = 0; i < 4000; i++) {
     const x = Math.random() * 512;
     const y = Math.random() * 512;
-    const v = Math.floor(30 + Math.random() * 30);
-    ctx.fillStyle = `rgb(${v},${v + 5},${v + 15})`;
+    const v = Math.floor(15 + Math.random() * 25);
+    ctx.fillStyle = `rgb(${v},${v + 2},${v + 8})`;
     ctx.fillRect(x, y, 2, 2);
   }
 
-  // Subtle pastel neon grid
-  ctx.strokeStyle = 'rgba(244, 114, 182, 0.2)';
-  ctx.lineWidth = 1.5;
+  // Subtle neon grid lines
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.14)';
+  ctx.lineWidth = 2;
   for (let g = 0; g <= 512; g += 64) {
     ctx.beginPath();
     ctx.moveTo(g, 0);
@@ -225,42 +142,50 @@ function createProceduralAsphaltTexture(maxAnisotropy: number): THREE.CanvasText
   return tex;
 }
 
+function createContactShadowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(128, 128, 12, 128, 128, 120);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+  grad.addColorStop(0.6, 'rgba(0, 0, 0, 0.35)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
   engine,
   isFullscreen = false,
   onToggleFullscreen,
-  isDark = true,
-  onOpenDiagnostics,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
 
+  const [dockCollapsed, setDockCollapsed] = useState(false);
   const [activeCam, setActiveCam] = useState<CameraPresetId>('booth');
   const [activeFinish, setActiveFinish] = useState<FinishPresetId>('candy_red');
-  const [explodedVal, setExplodedVal] = useState(0);
-  const [dockCollapsed, setDockCollapsed] = useState(false);
+  const [explodedRatio, setExplodedRatio] = useState(0);
   const [, setHudTick] = useState(0);
 
+  // Mutable refs read inside the 60fps loop without re-mounting WebGL
   const stateRef = useRef({
     exploded: 0,
-    finish: FINISH_PRESETS[0],
-    activeCamPreset: CAMERA_PRESETS[0],
-    cameraTransitionActive: false,
     hydraulicImpulse: 0,
+    cameraTransitionActive: false,
+    targetCamPos: new THREE.Vector3(...CAMERA_PRESETS[0].pos),
+    targetCamLook: new THREE.Vector3(...CAMERA_PRESETS[0].look),
+    finish: FINISH_PRESETS[0],
   });
-
-  useEffect(() => {
-    stateRef.current.exploded = explodedVal;
-  }, [explodedVal]);
-
-  useEffect(() => {
-    const f = FINISH_PRESETS.find((p) => p.id === activeFinish) || FINISH_PRESETS[0];
-    stateRef.current.finish = f;
-  }, [activeFinish]);
 
   useEffect(() => {
     const mount = canvasMountRef.current;
     if (!mount) return;
 
+    // 1. Software WebGL detection from GPU renderer string
     const isSoftwareGl = (() => {
       const probeCanvas = document.createElement('canvas');
       const gl = probeCanvas.getContext('webgl2');
@@ -281,7 +206,7 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.12;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
@@ -291,19 +216,17 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-
-    // Bright Pastel Sunset Sky & Fog (Warm Peach / Pastel Lavender)
-    const skyColor = new THREE.Color(0xfde2e4);
+    const skyColor = new THREE.Color(0x070913);
     scene.background = skyColor;
-    scene.fog = new THREE.FogExp2(0xfde2e4, 0.022);
+    scene.fog = new THREE.FogExp2(0x070913, 0.032);
 
-    // Studio Environment via RoomEnvironment
+    // 2. Studio Environment Map via RoomEnvironment + PMREMGenerator
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTexture;
     pmremGenerator.dispose();
 
-    const camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 120);
+    const camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 120);
     camera.position.set(...CAMERA_PRESETS[0].pos);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -319,30 +242,67 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
       stateRef.current.cameraTransitionActive = false;
     });
 
-    // Balanced Bright Pastel Lighting Rig
-    const hemiLight = new THREE.HemisphereLight(0xfef08a, 0xa7f3d0, 1.1);
+    // 3. Balanced 3-Point Studio & Street Lighting Rig
+    const hemiLight = new THREE.HemisphereLight(0x60a5fa, 0x1e1b4b, 0.75);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffedd5, 2.8);
-    sunLight.position.set(6, 10, 6);
-    sunLight.castShadow = !isSoftwareGl;
+    const keyLight = new THREE.DirectionalLight(0xfff1e6, 2.2);
+    keyLight.position.set(5, 8, 5);
+    keyLight.castShadow = !isSoftwareGl;
     const d = 8;
-    sunLight.shadow.camera.left = -d;
-    sunLight.shadow.camera.right = d;
-    sunLight.shadow.camera.top = d;
-    sunLight.shadow.camera.bottom = -d;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 25;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    scene.add(sunLight);
+    keyLight.shadow.camera.left = -d;
+    keyLight.shadow.camera.right = d;
+    keyLight.shadow.camera.top = d;
+    keyLight.shadow.camera.bottom = -d;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 25;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.normalBias = 0.02;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.SpotLight(0xef4444, 4.5, 22, Math.PI / 3, 0.6, 1.5);
+    rimLight.position.set(-4, 5, -5);
+    scene.add(rimLight);
+
+    const fillSpot = new THREE.SpotLight(0x3b82f6, 3.5, 22, Math.PI / 3, 0.6, 1.5);
+    fillSpot.position.set(4, 4.5, -4);
+    scene.add(fillSpot);
+
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    const vinylTexture = createProceduralVinylTexture(maxAniso);
+    const asphaltTexture = createProceduralAsphaltTexture(maxAniso);
+    const shadowTexture = createContactShadowTexture();
+
+    // Load custom White Chocolate Studio cover art onto the 3D vinyl center label
+    const imgLoader = new THREE.ImageLoader();
+    imgLoader.load(engine.customCoverUrl, (img) => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 512;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(vinylTexture.image as HTMLCanvasElement, 0, 0);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(256, 256, 76, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, 180, 180, 152, 152);
+      ctx.restore();
+      // Center spindle hole
+      ctx.fillStyle = '#090d16';
+      ctx.beginPath();
+      ctx.arc(256, 256, 10, 0, Math.PI * 2);
+      ctx.fill();
+      vinylTexture.image = c;
+      vinylTexture.needsUpdate = true;
+    });
 
     // Ground Plane
-    const asphaltTexture = createProceduralAsphaltTexture(renderer.capabilities.getMaxAnisotropy());
     const floorGeo = new THREE.PlaneGeometry(80, 80);
     const floorMat = new THREE.MeshStandardMaterial({
       map: asphaltTexture,
-      roughness: 0.28,
+      roughness: 0.32,
       metalness: 0.25,
     });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
@@ -351,35 +311,54 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
 
+    // Contact Shadow Grounding Planes (offset by +0.02 on Y to prevent Z-fighting)
+    const contactShadowGeo = new THREE.PlaneGeometry(4.5, 2.6);
+    const contactShadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTexture,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.55,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    const boothShadow = new THREE.Mesh(contactShadowGeo, contactShadowMat);
+    boothShadow.rotation.x = -Math.PI / 2;
+    boothShadow.position.set(0, 0.02, 0.2);
+    scene.add(boothShadow);
+
+    const carShadow = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 3.0), contactShadowMat);
+    carShadow.rotation.x = -Math.PI / 2;
+    carShadow.position.set(0, 0.02, -2.8);
+    scene.add(carShadow);
+
     // =========================================================================
-    // DJ BOOTH MODEL
+    // COMPOSITE MODEL 1: 10-Part DJ Booth & Dual Turntables (THREE.Group)
     // =========================================================================
     const djBoothGroup = new THREE.Group();
     djBoothGroup.position.set(0, 0, 0.2);
     scene.add(djBoothGroup);
 
-    const vinylTexture = createProceduralVinylTexture(renderer.capabilities.getMaxAnisotropy());
-    const pinstripeTexture = createLowriderPinstripeTexture();
-
+    // Shared PBR Materials for DJ Booth
     const bodyPaintMat = new THREE.MeshPhysicalMaterial({
       color: stateRef.current.finish.color,
       metalness: stateRef.current.finish.metalness,
       roughness: stateRef.current.finish.roughness,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.05,
+      clearcoatRoughness: 0.08,
     });
 
     const brushedChromeMat = new THREE.MeshPhysicalMaterial({
-      color: 0xf1f5f9,
-      metalness: 0.98,
-      roughness: 0.10,
-      clearcoat: 0.8,
+      color: 0xe2e8f0,
+      metalness: 0.96,
+      roughness: 0.14,
+      anisotropy: 0.7,
     });
 
     const darkChassisMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.8,
-      roughness: 0.35,
+      color: 0x111827,
+      metalness: 0.75,
+      roughness: 0.42,
     });
 
     const vinylDiscMat = new THREE.MeshStandardMaterial({
@@ -388,48 +367,117 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
       metalness: 0.15,
     });
 
-    // DJ Stand & Table
-    const standMesh = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.94, 1.1), darkChassisMat);
-    standMesh.position.set(0, 0.47, 0);
+    // Part 1: Beveled DJ Table Support Stand
+    const standShape = new THREE.Shape();
+    standShape.moveTo(-1.45, -0.55);
+    standShape.lineTo(1.45, -0.55);
+    standShape.lineTo(1.45, 0.55);
+    standShape.lineTo(-1.45, 0.55);
+    standShape.closePath();
+
+    const standGeo = new THREE.ExtrudeGeometry(standShape, {
+      depth: 0.92,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.04,
+      bevelSegments: 3,
+    });
+    standGeo.rotateX(-Math.PI / 2);
+    const standMesh = new THREE.Mesh(standGeo, darkChassisMat);
+    standMesh.position.y = 0;
     standMesh.castShadow = true;
+    standMesh.receiveShadow = true;
     djBoothGroup.add(standMesh);
 
-    const fasciaMesh = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.12, 1.18), bodyPaintMat);
-    fasciaMesh.position.set(0, 0.98, 0);
+    // Part 2: Custom Metallic Trim Fascia with Chrome Molding
+    const fasciaGeo = new THREE.ExtrudeGeometry(standShape, {
+      depth: 0.14,
+      bevelEnabled: true,
+      bevelThickness: 0.03,
+      bevelSize: 0.05,
+      bevelSegments: 4,
+    });
+    fasciaGeo.rotateX(-Math.PI / 2);
+    const fasciaMesh = new THREE.Mesh(fasciaGeo, bodyPaintMat);
+    fasciaMesh.position.y = 0.94;
+    fasciaMesh.castShadow = true;
     djBoothGroup.add(fasciaMesh);
 
-    // Vinyl Platters
-    const platterGeo = new THREE.CylinderGeometry(0.52, 0.54, 0.06, 40);
+    // Part 3 & 4: Left & Right Lathe-Turned Aluminum Platters
+    const platterPoints = [
+      new THREE.Vector2(0, 0),
+      new THREE.Vector2(0.54, 0),
+      new THREE.Vector2(0.52, 0.06),
+      new THREE.Vector2(0.49, 0.08),
+      new THREE.Vector2(0, 0.08),
+    ];
+    const platterGeo = new THREE.LatheGeometry(platterPoints, 48);
+
     const platterLeft = new THREE.Mesh(platterGeo, brushedChromeMat);
-    platterLeft.position.set(-0.82, 1.07, 0);
+    platterLeft.position.set(-0.82, 1.1, 0);
+    platterLeft.castShadow = true;
     djBoothGroup.add(platterLeft);
 
     const platterRight = new THREE.Mesh(platterGeo, brushedChromeMat);
-    platterRight.position.set(0.82, 1.07, 0);
+    platterRight.position.set(0.82, 1.1, 0);
+    platterRight.castShadow = true;
     djBoothGroup.add(platterRight);
 
-    // Vinyl Records
-    const vinylGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.02, 40);
+    // Part 5 & 6: Left & Right Spinning Vinyl Records + Chrome Spindles
+    const vinylGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.02, 48);
     const vinylLeft = new THREE.Mesh(vinylGeo, vinylDiscMat);
-    vinylLeft.position.set(-0.82, 1.13, 0);
+    vinylLeft.position.set(-0.82, 1.19, 0);
     djBoothGroup.add(vinylLeft);
 
     const vinylRight = new THREE.Mesh(vinylGeo, vinylDiscMat);
-    vinylRight.position.set(0.82, 1.13, 0);
+    vinylRight.position.set(0.82, 1.19, 0);
     djBoothGroup.add(vinylRight);
 
-    // Mixer Console & Crossfader
+    // Part 7 & 8: Left & Right S-Shaped Tubular Tonearms (TubeGeometry)
+    const createTonearmGroup = (xOffset: number) => {
+      const armGroup = new THREE.Group();
+      armGroup.position.set(xOffset, 1.18, -0.36);
+
+      const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.08, 24), brushedChromeMat);
+      armGroup.add(baseMesh);
+
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 0.05, 0),
+        new THREE.Vector3(-0.04, 0.06, 0.18),
+        new THREE.Vector3(0.03, 0.06, 0.36),
+        new THREE.Vector3(-0.08, 0.04, 0.52),
+      ]);
+      const tubeGeo = new THREE.TubeGeometry(curve, 24, 0.012, 12, false);
+      const tubeMesh = new THREE.Mesh(tubeGeo, brushedChromeMat);
+      armGroup.add(tubeMesh);
+
+      // Cartridge headshell
+      const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.025, 0.07), bodyPaintMat);
+      headMesh.position.set(-0.08, 0.035, 0.54);
+      armGroup.add(headMesh);
+
+      return armGroup;
+    };
+
+    const tonearmLeft = createTonearmGroup(-0.34);
+    tonearmLeft.rotation.y = 0.22;
+    djBoothGroup.add(tonearmLeft);
+
+    const tonearmRight = createTonearmGroup(1.3);
+    tonearmRight.rotation.y = 0.22;
+    djBoothGroup.add(tonearmRight);
+
+    // Part 9 & 10: Central Mixer Console & Animated Crossfader Cap
     const mixerPlate = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.05, 0.85), darkChassisMat);
-    mixerPlate.position.set(0, 1.06, 0);
+    mixerPlate.position.set(0, 1.12, 0);
     djBoothGroup.add(mixerPlate);
 
     const crossfaderCap = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), brushedChromeMat);
-    crossfaderCap.position.set(0, 1.10, 0.3);
+    crossfaderCap.position.set(0, 1.16, 0.32);
     djBoothGroup.add(crossfaderCap);
 
     // =========================================================================
-    // 1964 CHEVY IMPALA LOWRIDER MODEL (MATCHING .JPG PHOTO)
-    // Oriented facing directly forward towards the DJ Booth & Viewer!
+    // COMPOSITE MODEL 2: 8-Part West Coast Lowrider Cruiser (THREE.Group)
     // =========================================================================
     const lowriderGroup = new THREE.Group();
     lowriderGroup.position.set(0, 0, -2.8);
@@ -438,204 +486,220 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
     const chassisGroup = new THREE.Group();
     lowriderGroup.add(chassisGroup);
 
-    // Main Lowrider Body Hull (Facing +Z)
-    // Impala Long Stance: Width 2.3m (X), Length 4.6m (Z), Height 0.7m (Y)
-    const hoodPinstripeMat = new THREE.MeshPhysicalMaterial({
-      map: pinstripeTexture,
-      metalness: 0.90,
-      roughness: 0.14,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.04,
+    // Part 1: Sculpted Classic Lowrider Body Hull
+    const carBodyShape = new THREE.Shape();
+    carBodyShape.moveTo(-2.1, 0.28);
+    carBodyShape.lineTo(2.1, 0.28);
+    carBodyShape.lineTo(2.05, 0.78);
+    carBodyShape.lineTo(0.95, 0.84);
+    carBodyShape.lineTo(-0.95, 0.84);
+    carBodyShape.lineTo(-2.05, 0.76);
+    carBodyShape.closePath();
+
+    const carBodyGeo = new THREE.ExtrudeGeometry(carBodyShape, {
+      depth: 1.56,
+      bevelEnabled: true,
+      bevelThickness: 0.08,
+      bevelSize: 0.06,
+      bevelSegments: 4,
     });
+    carBodyGeo.translate(0, 0, -0.78);
+    const carBodyMesh = new THREE.Mesh(carBodyGeo, bodyPaintMat);
+    carBodyMesh.castShadow = true;
+    carBodyMesh.receiveShadow = true;
+    chassisGroup.add(carBodyMesh);
 
-    // Lower Main Hull
-    const mainHullMesh = new THREE.Mesh(new THREE.BoxGeometry(2.28, 0.52, 4.4), bodyPaintMat);
-    mainHullMesh.position.set(0, 0.52, 0);
-    mainHullMesh.castShadow = true;
-    chassisGroup.add(mainHullMesh);
+    // Part 2: Greenhouse Cabin & Optical Glass Windows
+    const cabinShape = new THREE.Shape();
+    cabinShape.moveTo(-0.95, 0.82);
+    cabinShape.lineTo(0.85, 0.82);
+    cabinShape.lineTo(0.48, 1.28);
+    cabinShape.lineTo(-0.65, 1.28);
+    cabinShape.closePath();
 
-    // Hood Top Deck with Pinstriping Scrollwork
-    const hoodDeck = new THREE.Mesh(new THREE.BoxGeometry(2.18, 0.06, 1.8), hoodPinstripeMat);
-    hoodDeck.position.set(0, 0.79, 1.05);
-    hoodDeck.castShadow = true;
-    chassisGroup.add(hoodDeck);
+    const cabinGeo = new THREE.ExtrudeGeometry(cabinShape, {
+      depth: 1.32,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.04,
+      bevelSegments: 3,
+    });
+    cabinGeo.translate(0, 0, -0.66);
 
-    // Chrome Hood Spear (Center Lowrider Ornament)
-    const hoodSpear = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.76), brushedChromeMat);
-    hoodSpear.position.set(0, 0.83, 1.05);
-    chassisGroup.add(hoodSpear);
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x93c5fd,
+      metalness: 0.1,
+      roughness: 0.08,
+      transmission: isSoftwareGl ? 0 : 0.88,
+      transparent: true,
+      opacity: isSoftwareGl ? 0.42 : 1.0,
+      ior: 1.52,
+      thickness: 0.5,
+      depthWrite: false,
+    });
+    const cabinMesh = new THREE.Mesh(cabinGeo, glassMat);
+    cabinMesh.renderOrder = 5;
+    chassisGroup.add(cabinMesh);
 
-    // Hood Front Bullet Emblem
-    const spearBullet = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 16), brushedChromeMat);
-    spearBullet.rotation.x = Math.PI / 2;
-    spearBullet.position.set(0, 0.84, 1.95);
-    chassisGroup.add(spearBullet);
+    // Part 3 & 4: Chrome Front & Rear Bumpers + Grille
+    const bumperGeo = new THREE.CylinderGeometry(0.11, 0.11, 1.76, 20);
+    bumperGeo.rotateX(Math.PI / 2);
 
-    // Classic Impala Curved Windshield & Chrome Pillars
-    const windshieldMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(2.0, 0.55, 0.9),
-      new THREE.MeshPhysicalMaterial({
-        color: 0x93c5fd,
-        metalness: 0.1,
-        roughness: 0.05,
-        transmission: isSoftwareGl ? 0 : 0.88,
-        transparent: true,
-        opacity: isSoftwareGl ? 0.45 : 0.92,
-      })
-    );
-    windshieldMesh.position.set(0, 1.05, -0.2);
-    chassisGroup.add(windshieldMesh);
+    const frontBumper = new THREE.Mesh(bumperGeo, brushedChromeMat);
+    frontBumper.position.set(2.14, 0.36, 0);
+    chassisGroup.add(frontBumper);
 
-    // Chrome Windshield Sunvisor & Header
-    const visorMesh = new THREE.Mesh(new THREE.BoxGeometry(2.06, 0.04, 0.22), brushedChromeMat);
-    visorMesh.position.set(0, 1.34, 0.24);
-    visorMesh.rotation.x = 0.15;
-    chassisGroup.add(visorMesh);
+    const rearBumper = new THREE.Mesh(bumperGeo, brushedChromeMat);
+    rearBumper.position.set(-2.14, 0.36, 0);
+    chassisGroup.add(rearBumper);
 
-    // Classic 1964 Impala Horizontal Chrome Front Grille
-    const grilleBack = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.34, 0.08), darkChassisMat);
-    grilleBack.position.set(0, 0.58, 2.21);
-    chassisGroup.add(grilleBack);
-
-    // Horizontal Chrome Slats on Grille
-    for (let s = -3; s <= 3; s++) {
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(2.08, 0.02, 0.06), brushedChromeMat);
-      slat.position.set(0, 0.58 + s * 0.04, 2.24);
-      chassisGroup.add(slat);
-    }
-
-    // Quad Headlights (Emissive Warm Golden with Chrome Bezels)
+    // Part 5: Quad Headlights (Emissive Warm Gold)
     const headlightMat = new THREE.MeshStandardMaterial({
       color: 0xfef08a,
       emissive: 0xf59e0b,
-      emissiveIntensity: 3.2,
-      roughness: 0.08,
+      emissiveIntensity: 2.5,
+      roughness: 0.1,
     });
-    const hlBezelGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.06, 24);
-    hlBezelGeo.rotateX(Math.PI / 2);
-    const hlLensGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.07, 24);
-    hlLensGeo.rotateX(Math.PI / 2);
-
-    [-0.92, -0.66, 0.66, 0.92].forEach((xPos) => {
-      const bezel = new THREE.Mesh(hlBezelGeo, brushedChromeMat);
-      bezel.position.set(xPos, 0.58, 2.23);
-      chassisGroup.add(bezel);
-
-      const lens = new THREE.Mesh(hlLensGeo, headlightMat);
-      lens.position.set(xPos, 0.58, 2.25);
-      chassisGroup.add(lens);
+    const hlGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 16);
+    hlGeo.rotateZ(Math.PI / 2);
+    [-0.55, -0.32, 0.32, 0.55].forEach((zPos) => {
+      const hl = new THREE.Mesh(hlGeo, headlightMat);
+      hl.position.set(2.12, 0.58, zPos);
+      chassisGroup.add(hl);
     });
 
-    // Wrap-Around Chrome Front Bumper with Dual Upright Bumperettes
-    const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(2.36, 0.14, 0.18), brushedChromeMat);
-    frontBumper.position.set(0, 0.36, 2.26);
-    frontBumper.castShadow = true;
-    chassisGroup.add(frontBumper);
-
-    // Dual Bumperettes (Upright Bumper Guards)
-    [-0.42, 0.42].forEach((bx) => {
-      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.16), brushedChromeMat);
-      guard.position.set(bx, 0.44, 2.32);
-      chassisGroup.add(guard);
-    });
-
-    // Dual Chrome Bullet Side Mirrors
-    [-1.16, 1.16].forEach((mx) => {
-      const mirrorArm = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12), brushedChromeMat);
-      mirrorArm.rotation.z = mx > 0 ? -0.4 : 0.4;
-      mirrorArm.position.set(mx, 0.88, 0.35);
-      chassisGroup.add(mirrorArm);
-
-      const mirrorHead = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), brushedChromeMat);
-      mirrorHead.position.set(mx > 0 ? mx + 0.04 : mx - 0.04, 0.93, 0.35);
-      chassisGroup.add(mirrorHead);
-    });
-
-    // 4 Dayton Wire Spoke Wheels with Whitewall Radial Tires
+    // Part 6–9: 4 100-Spoke Chrome Wire Lowrider Wheels with Whitewalls & Bullet Centercaps
     const wheelPositions: Array<[number, number, number]> = [
-      [1.16, 0.34, 1.35],   // Front Right
-      [-1.16, 0.34, 1.35],  // Front Left
-      [1.16, 0.34, -1.35],  // Rear Right
-      [-1.16, 0.34, -1.35], // Rear Left
+      [1.32, 0.34, 0.84],
+      [1.32, 0.34, -0.84],
+      [-1.32, 0.34, 0.84],
+      [-1.32, 0.34, -0.84],
     ];
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.75, metalness: 0.1 });
+    const whitewallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3, metalness: 0.1 });
+    const tireGeo = new THREE.TorusGeometry(0.26, 0.09, 16, 32);
+    const whitewallGeo = new THREE.TorusGeometry(0.23, 0.022, 12, 32);
+    const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.14, 32);
+    rimGeo.rotateX(Math.PI / 2);
 
-    const tireMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85, metalness: 0.1 });
-    const whitewallMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.1 });
-    const tireGeo = new THREE.TorusGeometry(0.28, 0.09, 16, 32);
-    const rimGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.16, 24);
-    rimGeo.rotateZ(Math.PI / 2);
-    const whitewallGeo = new THREE.RingGeometry(0.19, 0.24, 32);
-    whitewallGeo.rotateY(Math.PI / 2);
+    // 3D Chrome Bullet Centercap Cone
+    const bulletCapGeo = new THREE.ConeGeometry(0.065, 0.14, 24);
 
     const wheels: THREE.Group[] = [];
     wheelPositions.forEach(([wx, wy, wz]) => {
       const wGroup = new THREE.Group();
       wGroup.position.set(wx, wy, wz);
-
       const tire = new THREE.Mesh(tireGeo, tireMat);
-      tire.rotation.y = Math.PI / 2;
-      wGroup.add(tire);
-
       const whitewall = new THREE.Mesh(whitewallGeo, whitewallMat);
-      whitewall.position.x = wx > 0 ? 0.09 : -0.09;
-      wGroup.add(whitewall);
-
+      whitewall.position.z = wz > 0 ? 0.072 : -0.072;
       const rim = new THREE.Mesh(rimGeo, brushedChromeMat);
+
+      const bulletCap = new THREE.Mesh(bulletCapGeo, brushedChromeMat);
+      bulletCap.rotation.x = wz > 0 ? Math.PI / 2 : -Math.PI / 2;
+      bulletCap.position.z = wz > 0 ? 0.11 : -0.11;
+
+      wGroup.add(tire);
+      wGroup.add(whitewall);
       wGroup.add(rim);
-
-      // Gold 3-Prong Knockoff Spinner in Center
-      const knockoff = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.1, 3), brushedChromeMat);
-      knockoff.rotation.z = wx > 0 ? -Math.PI / 2 : Math.PI / 2;
-      knockoff.position.x = wx > 0 ? 0.12 : -0.12;
-      wGroup.add(knockoff);
-
+      wGroup.add(bulletCap);
       lowriderGroup.add(wGroup);
       wheels.push(wGroup);
     });
 
     // =========================================================================
-    // INSTANCED MESH: 36 Audio-Reactive Spectrum Columns
+    // INSTANCED MESH (>20 items): 36 Audio-Reactive 3D Spectrum Columns
     // =========================================================================
     const BAR_COUNT = 36;
     const barGeo = new THREE.BoxGeometry(0.22, 1.0, 0.22);
-    barGeo.translate(0, 0.5, 0);
-
-    const barMat = new THREE.MeshPhysicalMaterial({
-      color: 0xf43f5e,
-      emissive: 0xe11d48,
-      emissiveIntensity: 0.85,
+    barGeo.translate(0, 0.5, 0); // Pivot at bottom-center flush with ground
+    const barMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.22,
       metalness: 0.8,
-      roughness: 0.2,
     });
     const instancedBars = new THREE.InstancedMesh(barGeo, barMat, BAR_COUNT);
-    instancedBars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    instancedBars.frustumCulled = false;
+
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const angle = Math.PI + (i / (BAR_COUNT - 1)) * Math.PI; // Semicircle arc behind stage
+      const radius = 6.4;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius - 1.2;
+
+      _posVec.set(x, 0, z);
+      _scaleVec.set(1, 0.4, 1);
+      _quat.identity();
+      _mat4.compose(_posVec, _quat, _scaleVec);
+      instancedBars.setMatrixAt(i, _mat4);
+
+      // Gradient color per bar (Crimson -> Amber -> Blue)
+      const t = i / (BAR_COUNT - 1);
+      if (t < 0.5) {
+        _color.setHex(0xef4444).lerp(new THREE.Color(0xf59e0b), t * 2);
+      } else {
+        _color.setHex(0xf59e0b).lerp(new THREE.Color(0x3b82f6), (t - 0.5) * 2);
+      }
+      instancedBars.setColorAt(i, _color);
+    }
+    instancedBars.instanceMatrix.needsUpdate = true;
+    if (instancedBars.instanceColor) instancedBars.instanceColor.needsUpdate = true;
+    instancedBars.computeBoundingSphere();
     scene.add(instancedBars);
 
+    // Pre-warm shaders on GPU
+    if (!isSoftwareGl) {
+      renderer.compile(scene, camera);
+    }
+
     // =========================================================================
-    // Animation Loop
+    // Animation Loop with Software-WebGL Pacing & Exponential Damping
     // =========================================================================
     const clock = new THREE.Clock();
     const freqBuffer = new Uint8Array(64);
-    let animId = 0;
+    let frameId = 0;
+
+    function afterDraw(cb: () => void) {
+      const gl = renderer.getContext() as WebGL2RenderingContext;
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      const poll = () => {
+        const state = sync && gl.getSyncParameter(sync, gl.SYNC_STATUS);
+        if (state === gl.UNSIGNALED) {
+          frameId = window.setTimeout(poll, 5);
+        } else {
+          if (sync) gl.deleteSync(sync);
+          frameId = window.setTimeout(cb, 80);
+        }
+      };
+      frameId = window.setTimeout(poll, 5);
+    }
 
     function tick() {
       const delta = Math.min(clock.getDelta(), 0.1);
       const elapsed = clock.getElapsedTime();
 
-      // Dynamic paint finish updates
+      // Update paint finish dynamically
       bodyPaintMat.color.setHex(stateRef.current.finish.color);
       bodyPaintMat.metalness = stateRef.current.finish.metalness;
       bodyPaintMat.roughness = stateRef.current.finish.roughness;
 
-      // Spin platters synced to engine
+      // 1. Spin 3D Vinyl Platters synced to DJEngine Deck A & Deck B
       vinylLeft.rotation.y = -THREE.MathUtils.degToRad(engine.deckAState.rotationAngle);
       vinylRight.rotation.y = -THREE.MathUtils.degToRad(engine.deckBState.rotationAngle);
 
-      // Move crossfader
+      // 2. Move 3D Crossfader Cap with DJEngine crossfader
       const targetCrossX = engine.crossfader * 0.22;
       crossfaderCap.position.x = THREE.MathUtils.damp(crossfaderCap.position.x, targetCrossX, 12, delta);
 
-      // Audio analysis for hydraulic bounce
+      // 3. Exploded View Separation (Damped)
+      const exp = stateRef.current.exploded;
+      vinylLeft.position.y = THREE.MathUtils.damp(vinylLeft.position.y, 1.19 + exp * 0.55, 6, delta);
+      vinylRight.position.y = THREE.MathUtils.damp(vinylRight.position.y, 1.19 + exp * 0.55, 6, delta);
+      platterLeft.position.y = THREE.MathUtils.damp(platterLeft.position.y, 1.1 + exp * 0.25, 6, delta);
+      platterRight.position.y = THREE.MathUtils.damp(platterRight.position.y, 1.1 + exp * 0.25, 6, delta);
+      cabinMesh.position.y = THREE.MathUtils.damp(cabinMesh.position.y, exp * 0.65, 6, delta);
+
+      // 4. Audio-Reactive Spectrum Bars & Lowrider Hydraulic Suspension
       let bassEnergy = 0;
       if (engine.masterAnalyser) {
         engine.masterAnalyser.getByteFrequencyData(freqBuffer);
@@ -645,7 +709,6 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
         bassEnergy = bassEnergy / (8 * 255);
       }
 
-      // Spectrum Bars
       for (let i = 0; i < BAR_COUNT; i++) {
         const angle = Math.PI + (i / (BAR_COUNT - 1)) * Math.PI;
         const radius = 6.4;
@@ -664,264 +727,292 @@ export const ThreeDJStage: React.FC<ThreeDJStageProps> = ({
       }
       instancedBars.instanceMatrix.needsUpdate = true;
 
-      // Realistic Lowrider Hydraulic Hop Animation on Chassis
+      // Decay manual hydraulic impulse
       stateRef.current.hydraulicImpulse = THREE.MathUtils.damp(
         stateRef.current.hydraulicImpulse,
         0,
-        3.5,
+        4,
         delta
       );
 
-      const totalBounce = bassEnergy * 0.32 + stateRef.current.hydraulicImpulse;
-      chassisGroup.position.y = THREE.MathUtils.damp(chassisGroup.position.y, totalBounce, 12, delta);
-      chassisGroup.rotation.x = THREE.MathUtils.damp(
-        chassisGroup.rotation.x,
-        -totalBounce * 0.28,
-        10,
+      const bounceLift = bassEnergy * 0.36 + stateRef.current.hydraulicImpulse;
+      chassisGroup.position.y = THREE.MathUtils.damp(chassisGroup.position.y, bounceLift, 10, delta);
+      chassisGroup.rotation.z = THREE.MathUtils.damp(
+        chassisGroup.rotation.z,
+        Math.sin(elapsed * 4) * (bassEnergy * 0.08 + stateRef.current.hydraulicImpulse * 0.12),
+        8,
         delta
       );
 
-      // Camera preset interpolation
+      // Rotate lowrider rims subtly when playing
+      const wheelSpeed = (engine.deckAState.isPlaying || engine.deckBState.isPlaying) ? delta * 2.5 : 0;
+      wheels.forEach((w) => {
+        w.rotation.z -= wheelSpeed;
+      });
+
+      // 5. Damped Camera Preset Transitions
       if (stateRef.current.cameraTransitionActive) {
-        const targetP = stateRef.current.activeCamPreset.pos;
-        const targetL = stateRef.current.activeCamPreset.look;
-        _camTargetPos.set(...targetP);
-        _camTargetLook.set(...targetL);
+        camera.position.x = THREE.MathUtils.damp(camera.position.x, stateRef.current.targetCamPos.x, 4.5, delta);
+        camera.position.y = THREE.MathUtils.damp(camera.position.y, stateRef.current.targetCamPos.y, 4.5, delta);
+        camera.position.z = THREE.MathUtils.damp(camera.position.z, stateRef.current.targetCamPos.z, 4.5, delta);
 
-        camera.position.lerp(_camTargetPos, 0.08);
-        controls.target.lerp(_camTargetLook, 0.08);
+        controls.target.x = THREE.MathUtils.damp(controls.target.x, stateRef.current.targetCamLook.x, 4.5, delta);
+        controls.target.y = THREE.MathUtils.damp(controls.target.y, stateRef.current.targetCamLook.y, 4.5, delta);
+        controls.target.z = THREE.MathUtils.damp(controls.target.z, stateRef.current.targetCamLook.z, 4.5, delta);
 
-        if (camera.position.distanceTo(_camTargetPos) < 0.05) {
+        if (camera.position.distanceTo(stateRef.current.targetCamPos) < 0.05) {
           stateRef.current.cameraTransitionActive = false;
         }
       }
 
       controls.update();
       renderer.render(scene, camera);
-      animId = requestAnimationFrame(tick);
+
+      if (isSoftwareGl) {
+        afterDraw(tick);
+      } else {
+        frameId = requestAnimationFrame(tick);
+      }
     }
 
-    animId = requestAnimationFrame(tick);
+    frameId = requestAnimationFrame(tick);
 
     const handleResize = () => {
       if (!mount) return;
-      const w = mount.clientWidth;
-      const h = mount.clientHeight;
+      const w = mount.clientWidth || window.innerWidth;
+      const h = mount.clientHeight || 560;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
-
     window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
+      controls.dispose();
       renderer.dispose();
     };
   }, [engine]);
 
   const selectCameraPreset = (preset: CameraPreset) => {
     setActiveCam(preset.id);
-    stateRef.current.activeCamPreset = preset;
+    _camTargetPos.set(...preset.pos);
+    _camTargetLook.set(...preset.look);
+    stateRef.current.targetCamPos.copy(_camTargetPos);
+    stateRef.current.targetCamLook.copy(_camTargetLook);
     stateRef.current.cameraTransitionActive = true;
   };
 
+  const selectFinishPreset = (finish: (typeof FINISH_PRESETS)[0]) => {
+    setActiveFinish(finish.id);
+    stateRef.current.finish = finish;
+  };
+
   const triggerHydraulicBounce = () => {
-    stateRef.current.hydraulicImpulse = 0.65;
+    stateRef.current.hydraulicImpulse = 0.55;
     engine.triggerSoundboard('lowrider_horn');
   };
 
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-3xl border-2 border-white shadow-2xl bg-gradient-to-b from-rose-50/50 via-sky-50/50 to-white ${
+      className={`relative w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 ${
         isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none h-screen w-screen' : 'h-[540px] sm:h-[620px]'
       }`}
     >
-      {/* 3D WebGL Canvas */}
+      {/* Dedicated WebGL Mount Container (100% Unobstructed Center) */}
       <div ref={canvasMountRef} className="w-full h-full block" />
 
-      {/* Top Spec Card */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3 px-3.5 py-2 rounded-2xl border-2 border-white bg-white/90 backdrop-blur-md shadow-lg text-slate-800">
-        <img
-          src={engine.customCoverUrl}
-          alt="White Chocolate Studio"
-          referrerPolicy="no-referrer"
-          className="w-8 h-8 rounded-xl object-cover border border-rose-300 shadow-sm"
-        />
-        <div>
-          <div className="text-xs font-black text-slate-900 tracking-wide">
-            1964 IMPALA LOWRIDER & DJ RIG
-          </div>
-          <div className="text-[10px] text-rose-600 font-mono font-bold tabular-nums">
-            DECK A: {engine.deckAState.effectiveBpm} BPM · DECK B: {engine.deckBState.effectiveBpm} BPM
-          </div>
+      {/* Top-Center Minimal Read-Only HUD Badge */}
+      <div className="absolute top-3 inset-x-0 z-10 flex justify-center pointer-events-none px-4">
+        <div className="flex items-center gap-3 px-4 py-1.5 rounded-full border border-amber-500/30 bg-slate-950/90 text-xs shadow-lg">
+          <img
+            src={engine.customCoverUrl}
+            alt="White Chocolate Studio"
+            referrerPolicy="no-referrer"
+            className="w-6 h-6 rounded-full object-cover border border-amber-400"
+          />
+          <span className="font-black text-white tracking-wider uppercase text-[11px]">
+            WHITE CHOCOLATE 3D STAGE
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-[11px] text-amber-400 font-mono tabular-nums">
+            DECK A: {engine.deckAState.effectiveBpm.toFixed(1)} BPM · DECK B:{' '}
+            {engine.deckBState.effectiveBpm.toFixed(1)} BPM
+          </span>
         </div>
       </div>
 
-      {/* Fullscreen Toggle */}
-      {onToggleFullscreen && (
-        <button
-          onClick={onToggleFullscreen}
-          className={`absolute top-4 right-4 z-10 px-3.5 py-2 rounded-2xl border-2 ${
-            isDark ? 'border-slate-800 bg-slate-900/90 text-slate-200 hover:text-white' : 'border-white bg-white/90 text-slate-700 hover:text-slate-900'
-          } backdrop-blur-md text-xs font-bold shadow-lg flex items-center gap-1.5 transition-colors`}
+      {/* Centered Bottom 3D Control Dock */}
+      <div className="absolute inset-x-0 bottom-4 z-10 flex flex-col items-center justify-end px-3 sm:px-6 pointer-events-none">
+        <div
+          className={`w-full max-w-4xl flex flex-col items-center transition-all duration-200 pointer-events-auto ${
+            dockCollapsed ? 'translate-y-[calc(100%-38px)]' : 'translate-y-0'
+          }`}
         >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen 3D'}</span>
-        </button>
-      )}
+          {/* Centered Collapse / Expand Handle */}
+          <div className="flex justify-center mb-1.5">
+            <button
+              onClick={() => setDockCollapsed(!dockCollapsed)}
+              className="px-4 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/95 text-[11px] font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1.5 shadow-lg"
+            >
+              {dockCollapsed ? (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Show 3D Stage Controls</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Hide 3D Controls</span>
+                </>
+              )}
+            </button>
+          </div>
 
-      {/* Collapsible Bottom Control Dock */}
-      <div
-        className="absolute left-1/2 -translate-x-1/2 z-10 transition-transform duration-200"
-        style={{
-          bottom: '16px',
-          width: 'min(920px, 94vw)',
-          transform: `translateX(-50%) translateY(${dockCollapsed ? 'calc(100% - 36px)' : '0px'})`,
-        }}
-      >
-        <div className="flex justify-center mb-1.5">
-          <button
-            onClick={() => setDockCollapsed(!dockCollapsed)}
-            className={`px-4 py-1.5 rounded-t-2xl border-2 border-b-0 ${
-              isDark ? 'border-slate-800 bg-slate-900/95 text-slate-200 hover:text-white' : 'border-white bg-white/95 text-slate-700 hover:text-slate-900'
-            } text-[11px] font-black flex items-center gap-1.5 shadow-md`}
-          >
-            {dockCollapsed ? (
-              <>
-                <ChevronUp className="w-3.5 h-3.5 text-rose-500" />
-                <span>Show Stage Controls</span>
-              </>
-            ) : (
-              <>
-                <ChevronDown className="w-3.5 h-3.5 text-rose-500" />
-                <span>Hide Controls</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        <div className={`rounded-3xl border-2 ${
-          isDark ? 'border-slate-800 bg-slate-900/95 text-slate-100 shadow-slate-950/50' : 'border-white bg-white/95 text-slate-800 shadow-2xl'
-        } p-3.5 sm:p-4 space-y-3 backdrop-blur-md`}>
-          {/* Row 1: Quick DJ Transport + Hop Hydraulics + Cruiser Diagnostics */}
-          <div className={`flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b ${
-            isDark ? 'border-slate-800' : 'border-slate-100'
-          }`}>
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Centered Main Control Panel */}
+          <div className="w-full rounded-2xl border border-amber-500/30 bg-slate-950/95 p-3 sm:p-4 shadow-2xl space-y-3 text-center">
+            {/* Row 1 (Centered): Deck A · Crossfader · Deck B · Hydraulic Bounce · Fullscreen */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pb-2.5 border-b border-slate-800/90">
               <button
                 onClick={() => {
                   engine.playPauseDeck('A');
                   setHudTick((t) => t + 1);
                 }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                   engine.deckAState.isPlaying
-                    ? 'bg-rose-500 text-white animate-pulse'
-                    : isDark
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
                 }`}
               >
-                {engine.deckAState.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                {engine.deckAState.isPlaying ? (
+                  <Pause className="w-3.5 h-3.5" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
                 <span>Deck A</span>
               </button>
+
+              {/* Centered Crossfader */}
+              <div className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 w-52 sm:w-64">
+                <span className="text-[10px] font-black text-rose-400">A</span>
+                <input
+                  type="range"
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  value={engine.crossfader}
+                  onChange={(e) => {
+                    engine.updateCrossfader(parseFloat(e.target.value));
+                    setHudTick((t) => t + 1);
+                  }}
+                  className="dj-slider w-full h-4"
+                />
+                <span className="text-[10px] font-black text-blue-400">B</span>
+              </div>
 
               <button
                 onClick={() => {
                   engine.playPauseDeck('B');
                   setHudTick((t) => t + 1);
                 }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                   engine.deckBState.isPlaying
-                    ? 'bg-sky-500 text-white animate-pulse'
-                    : isDark
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-sky-100 text-sky-800 hover:bg-sky-200'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
                 }`}
               >
-                {engine.deckBState.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                {engine.deckBState.isPlaying ? (
+                  <Pause className="w-3.5 h-3.5" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
                 <span>Deck B</span>
               </button>
 
               <button
                 onClick={triggerHydraulicBounce}
-                className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-rose-400 text-white shadow-md active:scale-95 transition-all"
+                className="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors whitespace-nowrap shrink-0 shadow-md"
               >
-                🚘 Hop Hydraulics!
+                🛞 Hydraulic Bounce
               </button>
 
-              {onOpenDiagnostics && (
+              {onToggleFullscreen && (
                 <button
-                  onClick={onOpenDiagnostics}
-                  className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1.5"
-                  title="Open 1964 Impala OBD-II sensor diagnostics & route optimization AI"
+                  onClick={onToggleFullscreen}
+                  className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Gauge className="w-3.5 h-3.5" />
-                  <span>Cruiser Telemetry & AI</span>
+                  {isFullscreen ? (
+                    <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                  <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen 3D'}</span>
                 </button>
               )}
             </div>
 
-            {/* Crossfader */}
-            <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-xs">
-              <span className="text-[10px] font-black text-rose-500">A</span>
-              <input
-                type="range"
-                min={-1}
-                max={1}
-                step={0.01}
-                value={engine.crossfader}
-                onChange={(e) => {
-                  engine.updateCrossfader(parseFloat(e.target.value));
-                  setHudTick((t) => t + 1);
-                }}
-                className="crossfader-slider w-full h-4"
-              />
-              <span className="text-[10px] font-black text-sky-400">B</span>
-            </div>
-          </div>
+            {/* Row 2 (Centered): Camera Angles · Lowrider Finishes · Exploded View */}
+            <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
+              {/* Centered Camera Presets */}
+              <div className="flex items-center justify-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                <Camera className="w-3.5 h-3.5 text-amber-400 shrink-0 mx-1.5" />
+                {CAMERA_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => selectCameraPreset(preset)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 ${
+                      activeCam === preset.id
+                        ? 'bg-white text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
 
-          {/* Row 2: Camera Angles & Lowrider Finishes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center text-xs">
-            {/* Camera Presets */}
-            <div className="flex items-center gap-1 overflow-x-auto">
-              <Camera className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
-              {CAMERA_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => selectCameraPreset(preset)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 ${
-                    activeCam === preset.id
-                      ? 'bg-rose-500 text-white shadow-xs'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-300 hover:text-white'
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+              {/* Centered Finish Swatches */}
+              <div className="flex items-center justify-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mx-1.5" />
+                {FINISH_PRESETS.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => selectFinishPreset(f)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 ${
+                      activeFinish === f.id
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
 
-            {/* Paint Finishes */}
-            <div className="flex items-center gap-1.5 justify-start md:justify-end overflow-x-auto">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mr-1" />
-              {FINISH_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setActiveFinish(p.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold border transition-colors whitespace-nowrap shrink-0 ${
-                    activeFinish === p.id
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm font-black'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
-                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {/* Centered Exploded View Slider */}
+              <div className="flex items-center justify-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800">
+                <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap shrink-0">
+                  Explode View
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={explodedRatio}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setExplodedRatio(val);
+                    stateRef.current.exploded = val;
+                  }}
+                  className="dj-slider w-24 h-4"
+                />
+                <span className="text-[11px] font-mono text-amber-400 font-bold tabular-nums w-8 text-right">
+                  {Math.round(explodedRatio * 100)}%
+                </span>
+              </div>
             </div>
           </div>
         </div>
