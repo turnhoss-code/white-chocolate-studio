@@ -38,6 +38,17 @@ export const StreamOverlay: React.FC<StreamOverlayProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  // Allow Escape key to close the overlay
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // Audio Reactive Spectrum
   useEffect(() => {
     let animId: number;
@@ -136,12 +147,12 @@ export const StreamOverlay: React.FC<StreamOverlayProps> = ({
             referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-35 pointer-events-none"
           />
-          {/* Crisp primary .JPG overlay backdrop zoomed in 50% from 50% (0.75x scale default, adjustable live) */}
+          {/* Crisp primary .JPG overlay backdrop */}
           <img
             src={STUDIO_ICON_URL}
             alt="White Chocolate Studio Backdrop"
             referrerPolicy="no-referrer"
-            className="absolute inset-0 w-full h-full object-contain opacity-80 pointer-events-none transition-transform duration-150"
+            className="absolute inset-0 w-full h-full object-contain opacity-95 pointer-events-none transition-transform duration-150"
             style={{ transform: `scale(${(ov.backdropZoom || 75) / 100})` }}
           />
           {engine.customVideoUrl && (
@@ -154,7 +165,7 @@ export const StreamOverlay: React.FC<StreamOverlayProps> = ({
               className="absolute inset-0 w-full h-full object-cover opacity-65 pointer-events-none"
             />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/70 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/50 pointer-events-none" />
         </>
       )}
 
@@ -296,10 +307,11 @@ export const StreamOverlay: React.FC<StreamOverlayProps> = ({
           )}
           <button
             onClick={onClose}
-            className="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white border border-rose-400/80 text-xs font-black flex items-center gap-1.5 shadow-lg transition-all"
+            title="Close Stream Overlay (Esc)"
           >
-            <X className="w-4 h-4" />
-            <span>Exit Overlay</span>
+            <X className="w-4 h-4 stroke-[2.5]" />
+            <span>Close Overlay</span>
           </button>
         </div>
       </div>
@@ -328,52 +340,8 @@ export const StreamOverlay: React.FC<StreamOverlayProps> = ({
         </div>
       )}
 
-      {/* Centerpiece: Spinning 100-Spoke Chrome Wheel with Bullet Cap or Vinyl */}
-      <div className="relative flex flex-col items-center justify-center my-auto z-10">
-        <div className="relative p-2 rounded-full bg-gradient-to-b from-slate-200 via-slate-600 to-slate-950 shadow-2xl border-2 border-slate-400">
-          {ov.wheelStyle !== 'classic_vinyl' ? (
-            <ChromeWheelSvg
-              size={280}
-              rotationDeg={activeDeckState.rotationAngle}
-              accentColor={ov.wheelStyle === 'gold_100_spoke' ? '#f59e0b' : '#ef4444'}
-              goldNipples={true}
-              showWhitewall={true}
-              coverImageUrl={activeTrack?.coverImage || engine.customCoverUrl}
-            />
-          ) : (
-            <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full vinyl-texture border-4 border-slate-400 shadow-2xl flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full vinyl-sheen opacity-50" />
-              <div
-                className="w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden border-4 border-amber-400 shadow-2xl"
-                style={{
-                  transform: `rotate(${activeDeckState.rotationAngle}deg)`,
-                }}
-              >
-                <img
-                  src={activeTrack?.coverImage || engine.customCoverUrl}
-                  alt="White Chocolate Studio"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="absolute w-7 h-7 rounded-full bg-gradient-to-br from-white via-slate-300 to-slate-800 border-2 border-white shadow-md" />
-            </div>
-          )}
-        </div>
-
-        {/* Brand Wordmark Title */}
-        <div className="mt-3 -translate-y-[8mm] relative z-10 text-center bg-slate-950/85 px-5 py-2 rounded-2xl border border-amber-500/40">
-          <h1 className="text-lg sm:text-2xl font-black tracking-wider bg-gradient-to-r from-slate-100 via-amber-300 to-slate-100 bg-clip-text text-transparent uppercase font-display">
-            White Chocolate Studio
-          </h1>
-          <p className="text-[11px] text-amber-400 font-mono tracking-widest">
-            100-SPOKE LOWRIDER LIVE MIX · {activeDeckState.effectiveBpm.toFixed(1)} BPM
-          </p>
-        </div>
-      </div>
-
       {/* Bottom HUD: Chat Ticker, Spectrum Visualizer, Now Playing & Quick Voice/Drop Triggers */}
-      <div className="space-y-2.5 z-10 w-full max-w-2xl mx-auto">
+      <div className="space-y-2.5 z-10 w-full max-w-2xl mx-auto mt-auto">
         {/* Live TikTok Chat & Gift Feed */}
         {ov.showChatTicker && (
           <div className="bg-slate-950/85 rounded-xl border border-slate-800 p-2.5 max-h-24 overflow-y-auto space-y-1">

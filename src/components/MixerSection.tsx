@@ -71,36 +71,232 @@ export const MixerSection: React.FC<MixerSectionProps> = ({
   const [isImportingFiles, setIsImportingFiles] = useState(false);
   const libraryFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Real-Time Dual-Deck Frequency Spectrum Visualizer state & canvas ref
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [spectrumMode, setSpectrumMode] = useState<'split' | 'overlay' | 'mirror'>('split');
+  const peakHoldARef = useRef<number[]>(new Array(32).fill(0));
+  const peakHoldBRef = useRef<number[]>(new Array(32).fill(0));
+
   useEffect(() => {
     let animId: number;
-    const buf = new Uint8Array(32);
+    const bufMaster = new Uint8Array(64);
+    const bufA = new Uint8Array(64);
+    const bufB = new Uint8Array(64);
 
-    const checkLevels = () => {
+    const renderLoop = () => {
+      // 1. Master Bus Level
       if (engine.masterAnalyser) {
-        engine.masterAnalyser.getByteFrequencyData(buf);
+        engine.masterAnalyser.getByteFrequencyData(bufMaster);
         let sum = 0;
-        for (let i = 0; i < 16; i++) sum += buf[i];
-        setLevelMaster(Math.min(100, Math.round((sum / 16 / 255) * 115)));
+        for (let i = 0; i < 24; i++) sum += bufMaster[i];
+        setLevelMaster(Math.min(100, Math.round((sum / 24 / 255) * 120)));
       }
 
-      if (engine.deckAState.isPlaying) {
-        setLevelA(Math.min(100, Math.round(engine.deckAState.volume * 85 + Math.random() * 15)));
+      // 2. Deck A Incoming Audio Spectrum & Level
+      const analyserA = engine.getDeckAnalyser('A');
+      if (analyserA && engine.deckAState.isPlaying) {
+        analyserA.getByteFrequencyData(bufA);
+        let sumA = 0;
+        for (let i = 0; i < 24; i++) sumA += bufA[i];
+        setLevelA(Math.min(100, Math.round((sumA / 24 / 255) * 125)));
       } else {
+        bufA.fill(0);
         setLevelA(0);
       }
 
-      if (engine.deckBState.isPlaying) {
-        setLevelB(Math.min(100, Math.round(engine.deckBState.volume * 85 + Math.random() * 15)));
+      // 3. Deck B Incoming Audio Spectrum & Level
+      const analyserB = engine.getDeckAnalyser('B');
+      if (analyserB && engine.deckBState.isPlaying) {
+        analyserB.getByteFrequencyData(bufB);
+        let sumB = 0;
+        for (let i = 0; i < 24; i++) sumB += bufB[i];
+        setLevelB(Math.min(100, Math.round((sumB / 24 / 255) * 125)));
       } else {
+        bufB.fill(0);
         setLevelB(0);
       }
 
-      animId = requestAnimationFrame(checkLevels);
+      // 4. Draw Real-Time Dual-Deck Frequency Spectrum on Canvas
+      const canvas = spectrumCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const w = canvas.width;
+          const h = canvas.height;
+          ctx.clearRect(0, 0, w, h);
+
+          // Subtle studio dark background & dB / Frequency reference grid
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+          ctx.lineWidth = 1;
+          for (let row = 1; row <= 3; row++) {
+            const y = Math.round((h / 4) * row) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+          }
+          for (let col = 1; col < 8; col++) {
+            const x = Math.round((w / 8) * col) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+          }
+
+          const bins = 32;
+          const peaksA = peakHoldARef.current;
+          const peaksB = peakHoldBRef.current;
+
+          for (let i = 0; i < bins; i++) {
+            const vA = bufA[i] / 255;
+            const vB = bufB[i] / 255;
+            peaksA[i] = vA > peaksA[i] ? vA : Math.max(0, peaksA[i] - 0.012);
+            peaksB[i] = vB > peaksB[i] ? vB : Math.max(0, peaksB[i] - 0.012);
+          }
+
+          if (spectrumMode === 'split') {
+            // Left half: Deck A (Low -> High), Right half: Deck B (Low -> High)
+            const halfW = w / 2;
+            const barW = (halfW - 6) / bins;
+
+            // Center divider line
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+            ctx.beginPath();
+            ctx.moveTo(halfW, 0);
+            ctx.lineTo(halfW, h);
+            ctx.stroke();
+
+            for (let i = 0; i < bins; i++) {
+              // Deck A bar
+              const valA = bufA[i] / 255;
+              const barHA = Math.max(2, valA * (h - 16));
+              const xA = 2 + i * barW;
+              const yA = h - barHA;
+
+              const gradA = ctx.createLinearGradient(0, h, 0, 8);
+              gradA.addColorStop(0, '#be123c');
+              gradA.addColorStop(0.55, '#ef4444');
+              gradA.addColorStop(1, '#fbbf24');
+              ctx.fillStyle = gradA;
+              ctx.fillRect(xA, yA, Math.max(1.5, barW - 1.5), barHA);
+
+              // Deck A peak cap
+              const peakYA = h - Math.max(3, peaksA[i] * (h - 16));
+              ctx.fillStyle = '#fef08a';
+              ctx.fillRect(xA, peakYA - 2, Math.max(1.5, barW - 1.5), 2);
+
+              // Deck B bar
+              const valB = bufB[i] / 255;
+              const barHB = Math.max(2, valB * (h - 16));
+              const xB = halfW + 4 + i * barW;
+              const yB = h - barHB;
+
+              const gradB = ctx.createLinearGradient(0, h, 0, 8);
+              gradB.addColorStop(0, '#1d4ed8');
+              gradB.addColorStop(0.55, '#3b82f6');
+              gradB.addColorStop(1, '#38bdf8');
+              ctx.fillStyle = gradB;
+              ctx.fillRect(xB, yB, Math.max(1.5, barW - 1.5), barHB);
+
+              // Deck B peak cap
+              const peakYB = h - Math.max(3, peaksB[i] * (h - 16));
+              ctx.fillStyle = '#e0f2fe';
+              ctx.fillRect(xB, peakYB - 2, Math.max(1.5, barW - 1.5), 2);
+            }
+          } else if (spectrumMode === 'overlay') {
+            // Overlapping RTA Spectral Curves for Deck A & Deck B to compare EQ pockets
+            const drawCurve = (
+              data: Uint8Array,
+              strokeColor: string,
+              fillTop: string,
+              fillBottom: string
+            ) => {
+              ctx.beginPath();
+              ctx.moveTo(0, h);
+              for (let i = 0; i < bins; i++) {
+                const x = (i / (bins - 1)) * w;
+                const val = data[i] / 255;
+                const y = h - Math.max(3, val * (h - 14));
+                if (i === 0) {
+                  ctx.lineTo(x, y);
+                } else {
+                  const prevX = ((i - 1) / (bins - 1)) * w;
+                  const prevVal = data[i - 1] / 255;
+                  const prevY = h - Math.max(3, prevVal * (h - 14));
+                  const cx = (prevX + x) / 2;
+                  ctx.quadraticCurveTo(prevX, prevY, cx, (prevY + y) / 2);
+                }
+              }
+              ctx.lineTo(w, h);
+              ctx.closePath();
+
+              const grad = ctx.createLinearGradient(0, 0, 0, h);
+              grad.addColorStop(0, fillTop);
+              grad.addColorStop(1, fillBottom);
+              ctx.fillStyle = grad;
+              ctx.fill();
+
+              ctx.strokeStyle = strokeColor;
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            };
+
+            drawCurve(
+              bufA,
+              '#f43f5e',
+              'rgba(244, 63, 94, 0.55)',
+              'rgba(244, 63, 94, 0.05)'
+            );
+            drawCurve(
+              bufB,
+              '#38bdf8',
+              'rgba(56, 189, 248, 0.55)',
+              'rgba(56, 189, 248, 0.05)'
+            );
+          } else {
+            // 'mirror' mode: Deck A grows UP from center line, Deck B grows DOWN from center line
+            const midY = h / 2;
+            const barW = w / bins;
+
+            ctx.strokeStyle = 'rgba(248, 250, 252, 0.2)';
+            ctx.beginPath();
+            ctx.moveTo(0, midY);
+            ctx.lineTo(w, midY);
+            ctx.stroke();
+
+            for (let i = 0; i < bins; i++) {
+              const x = i * barW + 1;
+              const bw = Math.max(2, barW - 2);
+
+              // Deck A (top half)
+              const hA = Math.max(1.5, (bufA[i] / 255) * (midY - 6));
+              const gradA = ctx.createLinearGradient(0, midY, 0, 4);
+              gradA.addColorStop(0, '#ef4444');
+              gradA.addColorStop(1, '#fbbf24');
+              ctx.fillStyle = gradA;
+              ctx.fillRect(x, midY - hA, bw, hA);
+
+              // Deck B (bottom half)
+              const hB = Math.max(1.5, (bufB[i] / 255) * (midY - 6));
+              const gradB = ctx.createLinearGradient(0, midY, 0, h - 4);
+              gradB.addColorStop(0, '#3b82f6');
+              gradB.addColorStop(1, '#38bdf8');
+              ctx.fillStyle = gradB;
+              ctx.fillRect(x, midY, bw, hB);
+            }
+          }
+        }
+      }
+
+      animId = requestAnimationFrame(renderLoop);
     };
 
-    animId = requestAnimationFrame(checkLevels);
+    animId = requestAnimationFrame(renderLoop);
     return () => cancelAnimationFrame(animId);
-  }, [engine]);
+  }, [engine, spectrumMode]);
 
   const handleSlotSwapClick = (index: number) => {
     if (swapSourceIndex === null) {
@@ -207,6 +403,62 @@ export const MixerSection: React.FC<MixerSectionProps> = ({
                 {c}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Real-Time Dual-Deck Frequency Spectrum Analyzer (Deck A vs Deck B) */}
+      <div className="bg-slate-950 rounded-xl p-2.5 mb-3 border border-slate-800 shadow-inner">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-3 text-[10px] font-mono">
+            <span className="flex items-center gap-1.5 font-black text-rose-400">
+              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+              DECK A IN: {levelA}%
+            </span>
+            <span className="text-slate-600">|</span>
+            <span className="flex items-center gap-1.5 font-black text-blue-400">
+              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+              DECK B IN: {levelB}%
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+            {(
+              [
+                { id: 'split', label: 'Split A | B' },
+                { id: 'overlay', label: 'EQ Curve Overlay' },
+                { id: 'mirror', label: 'Horizon Mirror' },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setSpectrumMode(mode.id)}
+                className={`px-2 py-0.5 rounded text-[9px] font-bold transition-colors whitespace-nowrap ${
+                  spectrumMode === mode.id
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative w-full h-24 sm:h-28 rounded-lg overflow-hidden border border-slate-800/90 bg-slate-950">
+          <canvas
+            ref={spectrumCanvasRef}
+            width={640}
+            height={112}
+            className="w-full h-full block"
+          />
+          {/* Frequency Band Reference Markers */}
+          <div className="absolute bottom-1 left-2 right-2 flex justify-between text-[8px] font-mono text-slate-400/80 pointer-events-none select-none">
+            <span>60Hz SUB</span>
+            <span>250Hz LOW</span>
+            <span>1kHz MID</span>
+            <span>4kHz PRES</span>
+            <span>12kHz AIR</span>
           </div>
         </div>
       </div>

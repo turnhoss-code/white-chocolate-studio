@@ -624,8 +624,8 @@ export class DJEngine {
     reverbNode.connect(reverbWet);
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 128;
-    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.78;
 
     lowEQ.connect(midEQ);
     midEQ.connect(highEQ);
@@ -665,6 +665,11 @@ export class DJEngine {
       sourceStartedAt: 0,
       bufferOffset: 0,
     };
+  }
+
+  public getDeckAnalyser(deckId: 'A' | 'B'): AnalyserNode | null {
+    if (!this.deckNodes) return null;
+    return deckId === 'A' ? this.deckNodes.A.analyser : this.deckNodes.B.analyser;
   }
 
   private makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> {

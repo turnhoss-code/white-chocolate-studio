@@ -380,13 +380,13 @@ export default function App() {
         {workspaceTab === 'decks' && (
           <>
             {/* Mobile Sub-Selector */}
-            <div className="lg:hidden flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+            <div className="md:hidden flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
               {(
                 [
-                  { id: 'both', label: 'All Decks' },
+                  { id: 'both', label: 'Decks A & B + Mixer' },
                   { id: 'deckA', label: 'Deck A' },
-                  { id: 'mixer', label: 'Mixer & Library' },
                   { id: 'deckB', label: 'Deck B' },
+                  { id: 'mixer', label: 'Mixer & Library' },
                 ] as const
               ).map((item) => (
                 <button
@@ -403,19 +403,51 @@ export default function App() {
               ))}
             </div>
 
-            {/* Desktop 3-Column Layout: Deck A + Center Mixer/Library/Voice Recorder + Deck B */}
-            <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-start">
-              <div className="lg:col-span-4">
-                <DeckView
-                  deckId="A"
-                  engine={engine}
-                  state={engine.deckAState}
-                  availableTracks={tracks}
-                  onTrackAdded={handleAddTrackToLibrary}
-                />
-              </div>
+            {/* Side-by-Side Deck A & Deck B + Main Mixer Console */}
+            <div className="space-y-4">
+              {/* Top Row: Deck A and Deck B Side-by-Side Next to Each Other */}
+              {(mobileDeckFilter === 'both' ||
+                mobileDeckFilter === 'deckA' ||
+                mobileDeckFilter === 'deckB') && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div
+                    className={
+                      mobileDeckFilter === 'deckB' ? 'hidden md:block' : 'block'
+                    }
+                  >
+                    <DeckView
+                      deckId="A"
+                      engine={engine}
+                      state={engine.deckAState}
+                      availableTracks={tracks}
+                      onTrackAdded={handleAddTrackToLibrary}
+                    />
+                  </div>
 
-              <div className="lg:col-span-4">
+                  <div
+                    className={
+                      mobileDeckFilter === 'deckA' ? 'hidden md:block' : 'block'
+                    }
+                  >
+                    <DeckView
+                      deckId="B"
+                      engine={engine}
+                      state={engine.deckBState}
+                      availableTracks={tracks}
+                      onTrackAdded={handleAddTrackToLibrary}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Row: Central Mixer, Crossfader, Local Music Library Crate & Voice Clip Recorder */}
+              <div
+                className={
+                  mobileDeckFilter === 'both' || mobileDeckFilter === 'mixer'
+                    ? 'block'
+                    : 'hidden md:block'
+                }
+              >
                 <MixerSection
                   engine={engine}
                   crossfader={engine.crossfader}
@@ -426,51 +458,6 @@ export default function App() {
                   onAddTrackToLibrary={handleAddTrackToLibrary}
                 />
               </div>
-
-              <div className="lg:col-span-4">
-                <DeckView
-                  deckId="B"
-                  engine={engine}
-                  state={engine.deckBState}
-                  availableTracks={tracks}
-                  onTrackAdded={handleAddTrackToLibrary}
-                />
-              </div>
-            </div>
-
-            {/* Mobile / Tablet Responsive Deck Views */}
-            <div className="lg:hidden space-y-4">
-              {(mobileDeckFilter === 'both' || mobileDeckFilter === 'deckA') && (
-                <DeckView
-                  deckId="A"
-                  engine={engine}
-                  state={engine.deckAState}
-                  availableTracks={tracks}
-                  onTrackAdded={handleAddTrackToLibrary}
-                />
-              )}
-
-              {(mobileDeckFilter === 'both' || mobileDeckFilter === 'mixer') && (
-                <MixerSection
-                  engine={engine}
-                  crossfader={engine.crossfader}
-                  curve={engine.crossfaderCurve}
-                  onCrossfaderChange={(val) => engine.updateCrossfader(val)}
-                  onCurveChange={(curve) => engine.setCrossfaderCurve(curve)}
-                  availableTracks={tracks}
-                  onAddTrackToLibrary={handleAddTrackToLibrary}
-                />
-              )}
-
-              {(mobileDeckFilter === 'both' || mobileDeckFilter === 'deckB') && (
-                <DeckView
-                  deckId="B"
-                  engine={engine}
-                  state={engine.deckBState}
-                  availableTracks={tracks}
-                  onTrackAdded={handleAddTrackToLibrary}
-                />
-              )}
             </div>
 
             {/* Secondary Row: Real-Time DSP FX Rack & 12-Pad Lowrider/R&B Soundboard */}
